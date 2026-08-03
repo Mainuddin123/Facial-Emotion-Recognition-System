@@ -237,7 +237,19 @@ else:
 
     webrtc_streamer(
         key="emotion-recognition",
+
         video_processor_factory=EmotionProcessor,
+
+        rtc_configuration={
+            "iceServers": [
+                {
+                    "urls": [
+                        "stun:stun.l.google.com:19302"
+                    ]
+                }
+            ]
+        },
+
         media_stream_constraints={
             "video": True,
             "audio": False,
