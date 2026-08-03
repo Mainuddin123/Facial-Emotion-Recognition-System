@@ -6,7 +6,8 @@ import streamlit as st
 import cv2
 import numpy as np
 from PIL import Image
-from camera_input_live import camera_input_live
+from streamlit_webrtc import webrtc_streamer, VideoProcessorBase
+import av
 from utils.mediapipe_helper import (
     extract_landmarks,
     get_face_bbox,
@@ -15,6 +16,44 @@ from utils.mediapipe_helper import (
 from utils.preprocessing import preprocess
 from utils.predictor import predict_emotion
 
+class EmotionProcessor(VideoProcessorBase):
+
+    def recv(self, frame):
+        img = frame.to_ndarray(format="bgr24")
+
+        bbox = get_face_bbox(img)
+
+        if bbox is not None:
+
+            x1, y1, x2, y2 = bbox
+
+            cv2.rectangle(
+                img,
+                (x1, y1),
+                (x2, y2),
+                (0,255,0),
+                2
+            )
+
+            features = extract_landmarks(img)
+
+            if features is not None:
+
+                features = preprocess(features)
+
+                emotion, confidence, _ = predict_emotion(features)
+
+                cv2.putText(
+                    img,
+                    f"{emotion} ({confidence*100:.1f}%)",
+                    (x1, y1-10),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.8,
+                    (0,255,0),
+                    2,
+                )
+
+        return av.VideoFrame.from_ndarray(img, format="bgr24")
 
 # ==========================================
 # Streamlit Configuration
@@ -192,23 +231,21 @@ if input_mode == "Upload Image":
             image,
             cv2.COLOR_RGB2BGR
         )
-
 else:
 
     st.subheader("🎥 Live Camera")
 
-    frame = camera_input_live()
+    webrtc_streamer(
+        key="emotion-recognition",
+        video_processor_factory=EmotionProcessor,
+        media_stream_constraints={
+            "video": True,
+            "audio": False,
+        },
+    )
 
-    if frame is not None:
+    image = None
 
-        # Decode BytesIO -> PIL Image
-        image = Image.open(frame).convert("RGB")
-
-        # PIL -> NumPy
-        image = np.array(image)
-
-        # RGB -> OpenCV BGR
-        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
 
 # ==========================================
 # Image Prediction
